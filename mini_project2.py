@@ -1,7 +1,14 @@
  ### Utility Functions
+import os
 import pandas as pd
 import sqlite3
 from sqlite3 import Error
+from utils import get_db_url
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
 
 def create_connection(db_file, delete_db=False):
     import os
@@ -604,134 +611,216 @@ def ex7(conn):
     return sql_statement
 
 def ex8(conn):
-    
-    # Sum customer sales by Quarter and year
-    # Output Columns: Quarter,Year,CustomerID,Total
-    # HINT: Use "WITH"
-    # Hint: Round the the total
-    # HINT: YOU MUST CAST YEAR TO TYPE INTEGER!!!!
+  # Sum customer sales by Quarter and year
+  # Output Columns: Quarter, Year, CustomerID, Total
+  # HINT: Use "WITH"
+  # Hint: Round the total
+  # HINT: YOU MUST CAST YEAR TO TYPE INTEGER!!!!
 
-    sql_statement = """
-    WITH CustomerSales AS(
-      SELECT 
-        CASE
-          WHEN CAST(SUBSTR(OrderDetail.OrderDate,6,2)AS INTEGER) BETWEEN 1 AND 3 THEN 'Q1'
-          WHEN CAST(SUBSTR(OrderDetail.OrderDate,6,2)AS INTEGER) BETWEEN 4 AND 6 THEN 'Q2'
-          WHEN CAST(SUBSTR(OrderDetail.OrderDate,6,2)AS INTEGER) BETWEEN 7 AND 9 THEN 'Q3'
-          ELSE 'Q4'
-        END AS Quarter, 
+  query_ex8 = """
+  WITH sales_by_qtr AS (
+      SELECT
+          CASE
+              WHEN CAST(SUBSTR(d.OrderDate, 6, 2) AS INTEGER) BETWEEN 1 AND 3 THEN 'Q1'
+              WHEN CAST(SUBSTR(d.OrderDate, 6, 2) AS INTEGER) BETWEEN 4 AND 6 THEN 'Q2'
+              WHEN CAST(SUBSTR(d.OrderDate, 6, 2) AS INTEGER) BETWEEN 7 AND 9 THEN 'Q3'
+              ELSE 'Q4'
+          END AS Quarter,
+          CAST(SUBSTR(d.OrderDate, 1, 4) AS INTEGER) AS Year,
+          d.CustomerID AS CustomerID,
+          ROUND(SUM(pr.ProductUnitPrice * d.QuantityOrdered)) AS Total
+      FROM OrderDetail AS d
+      JOIN Product     AS pr ON pr.ProductID = d.ProductID
+      GROUP BY Quarter, Year, d.CustomerID
+  )
+  SELECT Quarter, Year, CustomerID, Total
+  FROM sales_by_qtr
+  ORDER BY Year, Quarter, CustomerID;
+  """
+  return query_ex8
 
-        CAST(SUBSTR(OrderDetail.OrderDate, 1,4) AS INTEGER) AS Year,
-        OrderDetail.CustomerID,
-        ROUND(SUM(Product.ProductUnitPrice * OrderDetail.QuantityOrdered)) AS Total
-      FROM OrderDetail
-      JOIN Product ON OrderDetail.ProductID = Product.ProductID
-      GROUP BY Year, Quarter, OrderDetail.CustomerID
-    )
-    SELECT Quarter, Year, CustomerID, Total
-    FROM CustomerSales
-    ORDER BY Year;
-    """
-# WRITE YOUR CODE HERE
-    df = pd.read_sql_query(sql_statement, conn)
-    print(df)
-    return sql_statement
 
 def ex9(conn):
-    
-    # Rank the customer sales by Quarter and year, but only select the top 5 customers!
-    # Output Columns: Quarter, Year, CustomerID, Total
-    # HINT: Use "WITH"
-    # Hint: Round the the total
-    # HINT: YOU MUST CAST YEAR TO TYPE INTEGER!!!!
-    # HINT: You can have multiple CTE tables;
-    # WITH table1 AS (), table2 AS ()
+  # Rank the customer sales by Quarter and year, but only select the top 5 customers!
+  # Output Columns: Quarter, Year, CustomerID, Total
+  # HINT: Use "WITH"
+  # Hint: Round the total
+  # HINT: YOU MUST CAST YEAR TO TYPE INTEGER!!!!
+  # HINT: You can have multiple CTE tables;
+  # WITH table1 AS (), table2 AS ()
 
-    sql_statement = """
-    WITH CustomerSales AS(
-      SELECT 
-        CASE
-          WHEN CAST(SUBSTR(OrderDetail.OrderDate,6,2)AS INTEGER) BETWEEN 1 AND 3 THEN 'Q1'
-          WHEN CAST(SUBSTR(OrderDetail.OrderDate,6,2)AS INTEGER) BETWEEN 4 AND 6 THEN 'Q2'
-          WHEN CAST(SUBSTR(OrderDetail.OrderDate,6,2)AS INTEGER) BETWEEN 7 AND 9 THEN 'Q3'
-          ELSE 'Q4'
-        END AS Quarter, 
+  query_ex9 = """
+  WITH sales_by_qtr AS (
+      SELECT
+          CASE
+              WHEN CAST(SUBSTR(d.OrderDate, 6, 2) AS INTEGER) BETWEEN 1 AND 3 THEN 'Q1'
+              WHEN CAST(SUBSTR(d.OrderDate, 6, 2) AS INTEGER) BETWEEN 4 AND 6 THEN 'Q2'
+              WHEN CAST(SUBSTR(d.OrderDate, 6, 2) AS INTEGER) BETWEEN 7 AND 9 THEN 'Q3'
+              ELSE 'Q4'
+          END AS Quarter,
+          CAST(SUBSTR(d.OrderDate, 1, 4) AS INTEGER) AS Year,
+          d.CustomerID AS CustomerID,
+          ROUND(SUM(pr.ProductUnitPrice * d.QuantityOrdered)) AS Total
+      FROM OrderDetail AS d
+      JOIN Product     AS pr ON pr.ProductID = d.ProductID
+      GROUP BY Quarter, Year, d.CustomerID
+  ),
+  ranked_sales AS (
+      SELECT
+          Quarter, Year, CustomerID, Total,
+          RANK() OVER (PARTITION BY Quarter, Year ORDER BY Total DESC) AS rnk
+      FROM sales_by_qtr
+  )
+  SELECT Quarter, Year, CustomerID, Total
+  FROM ranked_sales
+  WHERE rnk <= 5
+  ORDER BY Year, Quarter, Total DESC, CustomerID;
+  """
+  return query_ex9
 
-        CAST(SUBSTR(OrderDetail.OrderDate, 1,4) AS INTEGER) AS Year,
-        OrderDetail.CustomerID,
-        ROUND(SUM(Product.ProductUnitPrice * OrderDetail.QuantityOrdered)) AS Total
-      FROM OrderDetail
-      JOIN Product ON OrderDetail.ProductID = Product.ProductID
-      GROUP BY Year, Quarter, OrderDetail.CustomerID
-    ),
-    RankedSales AS (
-      SELECT Quarter, Year, CustomerID, Total,
-      RANK() OVER (PARTITION BY Year, Quarter ORDER BY Total DESC) AS CustomerRank
-    FROM CustomerSales
-    )
-    SELECT Quarter, Year, CustomerID, Total
-    FROM RankedSales
-    ORDER CustomerRank <= 5
-    ORDER BY Year ASC, Quarter ASC, Total DESC;
-
-    """
-# WRITE YOUR CODE HERE
-    return sql_statement
 
 def ex10(conn):
-    
-    # Rank the monthy sales
-    # Output Columns: Quarter, Year, CustomerID, Total
-    # HINT: Use "WITH"
-    # Hint: Round the the total
+  # Rank the monthly sales
+  # Output Columns: Month, Total, TotalRank
+  # HINT: Use "WITH"
+  # Hint: Round the total
 
-    sql_statement = """
-    """
+  query_ex10 = """
+  WITH monthly_sales AS (
+      SELECT
+          CASE SUBSTR(d.OrderDate, 6, 2)
+              WHEN '01' THEN 'January'
+              WHEN '02' THEN 'February'
+              WHEN '03' THEN 'March'
+              WHEN '04' THEN 'April'
+              WHEN '05' THEN 'May'
+              WHEN '06' THEN 'June'
+              WHEN '07' THEN 'July'
+              WHEN '08' THEN 'August'
+              WHEN '09' THEN 'September'
+              WHEN '10' THEN 'October'
+              WHEN '11' THEN 'November'
+              WHEN '12' THEN 'December'
+          END AS Month,
+          ROUND(SUM(pr.ProductUnitPrice * d.QuantityOrdered)) AS Total
+      FROM OrderDetail AS d
+      JOIN Product     AS pr ON pr.ProductID = d.ProductID
+      GROUP BY Month
+  )
+  SELECT
+      Month,
+      Total,
+      RANK() OVER (ORDER BY Total DESC) AS TotalRank
+  FROM monthly_sales;
+  """
+  return query_ex10
 
-# WRITE YOUR CODE HERE
-    return sql_statement
 
 def ex11(conn):
-    
-    # Find the MaxDaysWithoutOrder for each customer 
-    # Output Columns: 
-    # CustomerID,
-    # FirstName,
-    # LastName,
-    # Country,
-    # OrderDate, 
-    # PreviousOrderDate,
-    # MaxDaysWithoutOrder
-    # order by MaxDaysWithoutOrder desc
-    # HINT: Use "WITH"; I created two CTE tables
-    # HINT: Use Lag
-    sql_statement = """
-    WITH OrderGaps AS (
-      SELECT 
-        Customer.CustomerID,
-        Customer.FirstName,
-        Customer.LastName,
-        Country.Country,
-        OrderDetail.OrderDate,
-        LAS(OrderDetail.OrderDate) OVER (PARTITION BY Customer.CustomerID ORDER BY OrderDetail.OrderData) AS PreviousOrderDate
-      FROM OrderDetail
-      JOIN Customer ON OrderDetail.CustomerID = Customer.CustomerID
-      JOIN Country ON Customer.CountryID = Country.CountryID
-      ),
-    DaysBetweenOrders AS ( 
-      SELECT CustomerID, FirstName, LastName, Country, OrderDate, PreviousOrderDate,
-        CASE
-          WHEN PreviousOrderDate IS NULL THEN 0
-          ELSE JULIANDAY(OrderDate) - JULIANDAY(PreviousOrderDate)
-        END AS DaysWithoutOrder
-      FROM OrderGaps
-    
-    )
-    SELECT CustomerID, FirstName, LastName, Country, OrderDate, PreviousOrderDate, MAX(DaysWithoutOrder) AS MaxDaysWithoutOrder
-    FROM DaysBetweenOrders
-    GROUP BY CustomerID
-    ORDER BY MaxDaysWithoutOrder DESC;
-    )
-    """
+  # Find the MaxDaysWithoutOrder for each customer
+  # Output Columns:
+  # CustomerID, FirstName, LastName, Country, OrderDate, PreviousOrderDate, MaxDaysWithoutOrder
+  # order by MaxDaysWithoutOrder desc
+  # HINT: Use "WITH"; I created two CTE tables
+  # HINT: Use Lag
+
+  query_ex11 = """
+  WITH distinct_orders AS (
+      -- DISTINCT helps avoid multiple rows per day/customer from OrderDetail lines
+      SELECT DISTINCT
+          d.CustomerID,
+          d.OrderDate
+      FROM OrderDetail AS d
+      WHERE d.OrderDate IS NOT NULL
+  ),
+  customer_orders AS (
+      SELECT
+          cust.CustomerID,
+          cust.FirstName,
+          cust.LastName,
+          ctry.Country,
+          o.OrderDate,
+          LAG(o.OrderDate) OVER (
+              PARTITION BY cust.CustomerID
+              ORDER BY o.OrderDate
+          ) AS PreviousOrderDate
+      FROM distinct_orders AS o
+      JOIN Customer AS cust ON cust.CustomerID = o.CustomerID
+      JOIN Country  AS ctry ON ctry.CountryID = cust.CountryID
+  ),
+  gaps AS (
+      SELECT
+          CustomerID, FirstName, LastName, Country,
+          OrderDate, PreviousOrderDate,
+          (JULIANDAY(OrderDate) - JULIANDAY(PreviousOrderDate)) AS DaysWithoutOrder
+      FROM customer_orders
+      WHERE PreviousOrderDate IS NOT NULL
+  ),
+  max_gaps AS (
+      SELECT
+          CustomerID,
+          MAX(DaysWithoutOrder) AS MaxDaysWithoutOrder
+      FROM gaps
+      GROUP BY CustomerID
+  )
+  SELECT
+      g.CustomerID,
+      g.FirstName,
+      g.LastName,
+      g.Country,
+      g.OrderDate,
+      g.PreviousOrderDate,
+      mg.MaxDaysWithoutOrder
+  FROM gaps AS g
+  JOIN max_gaps AS mg
+      ON mg.CustomerID = g.CustomerID
+      AND mg.MaxDaysWithoutOrder = g.DaysWithoutOrder
+  WHERE g.OrderDate = (
+      SELECT MIN(g2.OrderDate)
+      FROM gaps AS g2
+      WHERE g2.CustomerID = g.CustomerID
+        AND g2.DaysWithoutOrder = mg.MaxDaysWithoutOrder
+  )
+  ORDER BY mg.MaxDaysWithoutOrder DESC, g.CustomerID DESC;
+  """
+  return query_ex11
+
 # WRITE YOUR CODE HERE
-    return sql_statement
+def populate_db(data_filename: str,
+                normalized_database_filename: str = "normalized.db",
+                delete_db: bool = True):
+    """
+    Builds + populates the SQLite normalized db by running your steps in order.
+    """
+
+    # start fresh (delete the whole db file) if requested
+    create_connection(normalized_database_filename, delete_db=delete_db).close()
+
+    # run steps in dependency order
+    step1_create_region_table(data_filename, normalized_database_filename)
+    step3_create_country_table(data_filename, normalized_database_filename)
+    step5_create_customer_table(data_filename, normalized_database_filename)
+    step7_create_productcategory_table(data_filename, normalized_database_filename)
+    step9_create_product_table(data_filename, normalized_database_filename)
+    step11_create_orderdetail_table(data_filename, normalized_database_filename)
+
+    print(f"Database build complete: {normalized_database_filename}")
+
+
+if __name__ == "__main__":
+    # CHANGE THIS to your real input file name
+    DATABASE_URL = get_db_url()
+    DATA_FILE = "data.csv"   
+    DB_FILE = "normalized.db"
+
+    populate_db(DATA_FILE, DB_FILE, delete_db=True)
+
+    # quick sanity check (optional)
+    conn = create_connection(DB_FILE)
+    print("Region rows:", execute_sql_statement("SELECT COUNT(*) FROM Region;", conn)[0][0])
+    print("Country rows:", execute_sql_statement("SELECT COUNT(*) FROM Country;", conn)[0][0])
+    print("Customer rows:", execute_sql_statement("SELECT COUNT(*) FROM Customer;", conn)[0][0])
+    print("ProductCategory rows:", execute_sql_statement("SELECT COUNT(*) FROM ProductCategory;", conn)[0][0])
+    print("Product rows:", execute_sql_statement("SELECT COUNT(*) FROM Product;", conn)[0][0])
+    print("OrderDetail rows:", execute_sql_statement("SELECT COUNT(*) FROM OrderDetail;", conn)[0][0])
+    conn.close()
