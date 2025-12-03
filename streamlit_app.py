@@ -6,10 +6,8 @@ import bcrypt
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 from psycopg2.pool import SimpleConnectionPool
 
-# -------------------- page config --------------------
 st.set_page_config(page_title="🤖 AI-Powered SQL Query Assistant", page_icon="🤖", layout="wide")
 
-# -------------------- allow big CSV fields safely --------------------
 max_int = sys.maxsize
 while True:
     try:
@@ -18,7 +16,6 @@ while True:
     except OverflowError:
         max_int = int(max_int / 10)
 
-# -------------------- secrets/env helpers --------------------
 def get_secret(key: str, default=None):
     try:
         return st.secrets.get(key, os.getenv(key, default))
@@ -48,11 +45,10 @@ def get_db_url() -> str | None:
 
     return None
 
-# -------------------- login --------------------
 def login_screen():
-    st.title("🔒 Secure Login")
+    st.title("🔒 Login")
     st.markdown("---")
-    st.write("Enter your password to access the AI SQL Query Assistant.")
+    st.write("Enter your password.🤫")
 
     raw_hash = get_secret("HASHED_PASSWORD")
     if not raw_hash:
@@ -73,26 +69,19 @@ def login_screen():
                     st.success("✅ Authentication successful. Redirecting...")
                     st.rerun()
                 else:
-                    st.error("❌ Incorrect Password")
+                    st.error("😱 Incorrect Password")
             except Exception as e:
                 st.error(f"Authentication error: {e}")
         else:
             st.warning("⚠️ Please enter a password")
 
-    st.markdown("---")
-    st.info(
-        "**Security Notice:**\n"
-        "- Passwords are protected using bcrypt hashing\n"
-        "- Your session is secure and isolated\n"
-        "- You will remain logged in until you close the browser or click logout"
-    )
+
 
 def require_login():
     if not st.session_state.get("logged_in", False):
         login_screen()
         st.stop()
 
-# -------------------- Postgres pool + helpers --------------------
 @st.cache_resource
 def get_pg_pool() -> SimpleConnectionPool:
     url = get_db_url()
@@ -348,7 +337,7 @@ def main():
 
     col1, col2, _ = st.columns([1, 1, 4])
     with col1:
-        generate_button = st.button("Generate SQL", type="primary", use_container_width=True)
+        generate_button = st.button("Run SQL", type="primary", use_container_width=True)
     with col2:
         if st.button("Clear History", use_container_width=True):
             st.session_state.query_history = []
@@ -394,7 +383,7 @@ def main():
             else:
                 first = user_sql.split(None, 1)[0].lower()
                 if first not in ("select", "with"):
-                    st.error("Only SELECT/WITH queries are allowed.")
+                    st.error()
                 else:
                     try:
                         with st.spinner("Executing query..."):
@@ -444,7 +433,7 @@ def main():
 
     # Optional: Custom SQL section (kept, but styled like the first app)
     st.markdown("---")
-    st.subheader("🧪 Run custom SQL (SELECT only)")
+    st.subheader("🏃🏽‍➡️ Run custom SQL")
     custom = st.text_area("Custom SQL", height=140, placeholder="SELECT * FROM raw_data LIMIT 10;")
     if st.button("Run custom SQL", use_container_width=True):
         s = (custom or "").strip()
